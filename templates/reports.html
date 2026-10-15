@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}Reports — BarcodeAttend{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-bar-chart-line me-2"></i>Reports</h2>
+
+<!-- Session Summary -->
+<h5 class="mb-3">Session Attendance Summary</h5>
+{% if sessions %}
+<div class="card shadow-sm mb-5">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Session</th>
+          <th>Course</th>
+          <th>Lecturer</th>
+          <th class="text-center">Present / Total</th>
+          <th>Rate</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        {% set rate = ((s.present / total_students * 100) | round(1)) if total_students > 0 else 0 %}
+        <tr>
+          <td class="text-muted small text-nowrap">{{ s.session_date }}</td>
+          <td class="fw-semibold">
+            <a href="{{ url_for('attendance', session_id=s.id) }}" class="text-decoration-none">
+              {{ s.title }}
+            </a>
+          </td>
+          <td>{{ s.course }}</td>
+          <td>{{ s.lecturer or '—' }}</td>
+          <td class="text-center">
+            <span class="badge bg-success">{{ s.present }}</span>
+            <span class="text-muted small"> / {{ total_students }}</span>
+          </td>
+          <td style="min-width:130px">
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:6px">
+                <div class="progress-bar
+                  {% if rate >= 75 %}bg-success{% elif rate >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                  style="width:{{ rate }}%">
+                </div>
+              </div>
+              <small class="text-muted">{{ rate }}%</small>
+            </div>
+          </td>
+          <td>
+            <a href="{{ url_for('export_csv', session_id=s.id) }}"
+               class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-download"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<p class="text-muted mb-5">No sessions recorded yet.</p>
+{% endif %}
+
+<!-- Fraud Detection Section -->
+<div class="d-flex align-items-center gap-2 mb-3">
+  <h5 class="mb-0 text-danger">
+    <i class="bi bi-shield-exclamation me-1"></i>Duplicate Scan Detection Log
+  </h5>
+  {% if duplicates %}
+  <span class="badge bg-danger">{{ duplicates|length }} attempt(s)</span>
+  {% endif %}
+</div>
+
+{% if duplicates %}
+<div class="alert alert-danger">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>{{ duplicates|length }} duplicate scan(s) detected.</strong>
+  Each entry below represents a barcode that was presented again after the student was already
+  marked present — a potential attendance fraud attempt.
+</div>
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Timestamp</th>
+          <th>Student ID</th>
+          <th>Session</th>
+          <th>Course</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in duplicates %}
+        <tr class="table-danger">
+          <td class="small text-nowrap">{{ d.scan_time }}</td>
+          <td><code class="text-danger">{{ d.barcode_value }}</code></td>
+          <td>{{ d.title or '—' }}</td>
+          <td>{{ d.course or '—' }}</td>
+          <td class="small">{{ d.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-success">
+  <i class="bi bi-shield-check me-2"></i>
+  <strong>No duplicate scan attempts detected.</strong>
+  All attendance records are clean.
+</div>
+{% endif %}
+{% endblock %}

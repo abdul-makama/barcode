@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+{% block title %}Attendance — {{ session.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-upc-scan me-2"></i>{{ session.title }}</h2>
+    <small class="text-muted">
+      {{ session.course }}
+      {% if session.lecturer %} &bull; {{ session.lecturer }}{% endif %}
+      &bull; {{ session.session_date }}
+    </small>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="badge bg-success fs-6 px-3 py-2" id="count-badge">
+      {{ records|length }} present
+    </span>
+    <a href="{{ url_for('export_csv', session_id=session.id) }}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-download me-1"></i>CSV
+    </a>
+    <a href="{{ url_for('sessions') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Sessions
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+
+  <!-- ── Scanner panel ───────────────────────────────────────────────────── -->
+  <div class="col-lg-5">
+
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-camera-video me-1"></i>QR / Barcode Scanner</span>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="cameraToggle"
+                 onchange="toggleCamera(this.checked)">
+          <label class="form-check-label small" for="cameraToggle">Camera</label>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="reader" class="mb-3 scanner-box">
+          <div class="text-center text-muted py-4">
+            <i class="bi bi-camera-video-off display-5"></i>
+            <p class="mt-2 small mb-0">Toggle camera on to start scanning</p>
+          </div>
+        </div>
+
+        <!-- Feedback -->
+        <div id="feedback" class="alert d-none mb-3 py-2" role="alert"></div>
+
+        <!-- Manual entry -->
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-keyboard"></i></span>
+          <input type="text" id="manualInput" class="form-control"
+                 placeholder="Type Student ID then press Enter"
+                 autocomplete="off" autocapitalize="characters"
+                 style="text-transform:uppercase">
+          <button class="btn btn-primary" id="submitBtn"
+                  onclick="submitScan(document.getElementById('manualInput').value)">
+            <i class="bi bi-send"></i>
+          </button>
+        </div>
+        <div class="form-text">Works as a barcode-gun input too.</div>
+      </div>
+    </div>
+
+    <!-- Scan log -->
+    <div class="card shadow-sm mt-3">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-list-ul me-1"></i>Scan Log
+      </div>
+      <ul class="list-group list-group-flush scan-log" id="scanLog">
+        {% for log in logs %}
+        <li class="list-group-item
+            {% if log.status == 'success' %}list-group-item-success
+            {% elif log.status == 'duplicate' %}list-group-item-danger
+            {% else %}list-group-item-warning{% endif %}
+            py-1 px-3 small d-flex justify-content-between">
+          <span>
+            <strong>{{ log.status|upper }}</strong> — {{ log.message }}
+          </span>
+          <span class="text-muted ms-2 text-nowrap">{{ log.scan_time[-8:] }}</span>
+        </li>
+        {% else %}
+        <li class="list-group-item text-muted small py-2 px-3" id="emptyLog">
+          No scans yet this session.
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- ── Attendance list ─────────────────────────────────────────────────── -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-person-check me-1"></i>Present Students
+      </div>
+      <div class="table-responsive attendance-scroll">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:40px">#</th>
+              <th>Name</th>
+              <th>Student ID</th>
+              <th>Course</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceBody">
+            {% for r in records %}
+            <tr>
+              <td class="text-muted">{{ loop.index }}</td>
+              <td class="fw-semibold">{{ r.name }}</td>
+              <td><code>{{ r.student_id }}</code></td>
+              <td>{{ r.course or '—' }}</td>
+              <td class="text-muted small">{{ r.scan_time[-8:] }}</td>
+            </tr>
+            {% else %}
+            <tr id="emptyRow">
+              <td colspan="5" class="text-center text-muted py-5">
+                <i class="bi bi-hourglass display-6 d-block mb-2"></i>
+                No one marked present yet.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+const SESSION_ID = {{ session.id }};
+let html5QrCode  = null;
+let scanning     = false;
+let cooldown     = {};
+let rowCount     = {{ records|length }};
+
+// ── Camera ──────────────────────────────────────────────────────────────────
+
+function toggleCamera(on) {
+  if (on) startCamera(); else stopCamera();
+}
+
+async function startCamera() {
+  if (scanning) return;
+  html5QrCode = new Html5Qrcode('reader');
+  try {
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onScanSuccess,
+      () => {}
+    );
+    scanning = true;
+  } catch (err) {
+    showFeedback({ status: 'error', message: 'Camera unavailable. Use manual entry below.' });
+    document.getElementById('cameraToggle').checked = false;
+  }
+}
+
+async function stopCamera() {
+  if (!scanning || !html5QrCode) return;
+  try { await html5QrCode.stop(); html5QrCode.clear(); } catch (_) {}
+  scanning     = false;
+  html5QrCode  = null;
+  document.getElementById('reader').innerHTML =
+    '<div class="text-center text-muted py-4">' +
+    '<i class="bi bi-camera-video-off display-5"></i>' +
+    '<p class="mt-2 small mb-0">Camera off</p></div>';
+}
+
+function onScanSuccess(text) {
+  const now = Date.now();
+  if (cooldown[text] && now - cooldown[text] < 3000) return;
+  cooldown[text] = now;
+  submitScan(text);
+}
+
+// ── Scan submission ──────────────────────────────────────────────────────────
+
+function submitScan(raw) {
+  const barcode = raw.trim().toUpperCase();
+  if (!barcode) return;
+  document.getElementById('manualInput').value = '';
+  document.getElementById('submitBtn').disabled = true;
+
+  fetch('/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ barcode, session_id: SESSION_ID })
+  })
+  .then(r => r.json())
+  .then(data => {
+    showFeedback(data);
+    if (data.status === 'success') addToTable(data.student, data.count);
+    addToLog(data);
+  })
+  .finally(() => {
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('manualInput').focus();
+  });
+}
+
+// ── Feedback alert ───────────────────────────────────────────────────────────
+
+function showFeedback(data) {
+  const el = document.getElementById('feedback');
+  el.className = 'alert mb-3 py-2';
+  const icons = { success: 'check-circle-fill', duplicate: 'exclamation-triangle-fill',
+                  unknown: 'question-circle-fill', error: 'x-circle-fill' };
+  const icon = icons[data.status] || 'info-circle';
+
+  if (data.status === 'success') {
+    el.classList.add('alert-success');
+    el.innerHTML = `<i class="bi bi-${icon} me-2"></i><strong>PRESENT</strong> — ${data.message}`;
+  } else if (data.status === 'duplicate') {
+    el.classList.add('alert-danger');
+    el.innerHTML =
+      `<i class="bi bi-${icon} me-2"></i><strong>DUPLICATE SCAN DETECTED</strong><br>` +
+      `<small>${data.message}</small>`;
+  } else if (data.status === 'unknown') {
+    el.classList.add('alert-warning');
+    el.innerHTML = `<i class="bi bi-${icon} me-2"></i><strong>UNKNOWN ID</strong> — ${data.message}`;
+  } else {
+    el.classList.add('alert-secondary');
+    el.innerHTML = data.message;
+  }
+
+  el.classList.remove('d-none');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.add('d-none'), 5000);
+}
+
+// ── Live table update ────────────────────────────────────────────────────────
+
+function addToTable(student, count) {
+  const tbody   = document.getElementById('attendanceBody');
+  const emptyRow = document.getElementById('emptyRow');
+  if (emptyRow) emptyRow.remove();
+
+  rowCount++;
+  const tr = document.createElement('tr');
+  tr.className = 'table-success new-row';
+  tr.innerHTML =
+    `<td class="text-muted">${rowCount}</td>` +
+    `<td class="fw-semibold">${student.name}</td>` +
+    `<td><code>${student.student_id}</code></td>` +
+    `<td>${student.course || '—'}</td>` +
+    `<td class="text-muted small">${new Date().toTimeString().slice(0, 8)}</td>`;
+  tbody.insertBefore(tr, tbody.firstChild);
+  setTimeout(() => tr.classList.remove('table-success', 'new-row'), 2500);
+
+  document.getElementById('count-badge').textContent = `${count} present`;
+}
+
+// ── Scan log update ──────────────────────────────────────────────────────────
+
+function addToLog(data) {
+  const list  = document.getElementById('scanLog');
+  const empty = document.getElementById('emptyLog');
+  if (empty) empty.remove();
+
+  const cls = data.status === 'success' ? 'success'
+            : data.status === 'duplicate' ? 'danger' : 'warning';
+  const li = document.createElement('li');
+  li.className =
+    `list-group-item list-group-item-${cls} py-1 px-3 small d-flex justify-content-between`;
+  li.innerHTML =
+    `<span><strong>${data.status.toUpperCase()}</strong> — ${data.message}</span>` +
+    `<span class="text-muted ms-2 text-nowrap">${new Date().toTimeString().slice(0, 8)}</span>`;
+  list.insertBefore(li, list.firstChild);
+
+  // Keep log to 30 items
+  while (list.children.length > 30) list.removeChild(list.lastChild);
+}
+
+// ── Manual input — submit on Enter ──────────────────────────────────────────
+
+document.getElementById('manualInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') submitScan(this.value);
+});
+</script>
+{% endblock %}

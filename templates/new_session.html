@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}New Session — BarcodeAttend{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <h2 class="mb-4"><i class="bi bi-calendar-plus me-2"></i>New Session</h2>
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Session Title <span class="text-danger">*</span>
+            </label>
+            <input type="text" name="title" class="form-control"
+                   placeholder="e.g. Lecture 5 — Introduction to Algorithms" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              Course Code <span class="text-danger">*</span>
+            </label>
+            <input type="text" name="course" class="form-control"
+                   placeholder="e.g. CSC301" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Lecturer</label>
+            <input type="text" name="lecturer" class="form-control"
+                   placeholder="e.g. Dr. A. Smith">
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Date <span class="text-danger">*</span>
+            </label>
+            <input type="date" name="session_date" class="form-control"
+                   value="{{ today }}" required>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-play-circle me-1"></i>Create &amp; Open Scanner
+            </button>
+            <a href="{{ url_for('sessions') }}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

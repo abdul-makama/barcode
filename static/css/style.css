@@ -1,0 +1,76 @@
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+body {
+  background-color: #f4f6f9;
+}
+
+.footer {
+  background-color: #fff;
+}
+
+/* ── Stat cards ─────────────────────────────────────────────────────────── */
+.stat-number {
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+
+/* ── Scanner box ─────────────────────────────────────────────────────────── */
+.scanner-box {
+  min-height: 220px;
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-box > div {
+  width: 100%;
+}
+
+/* html5-qrcode overrides */
+#reader video {
+  width: 100% !important;
+  border-radius: 0;
+}
+
+#reader img {
+  width: 100% !important;
+}
+
+/* ── Attendance table scroll ─────────────────────────────────────────────── */
+.attendance-scroll {
+  max-height: 580px;
+  overflow-y: auto;
+}
+
+/* ── Scan log scroll ─────────────────────────────────────────────────────── */
+.scan-log {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* ── New row flash animation ─────────────────────────────────────────────── */
+@keyframes rowHighlight {
+  from { background-color: #d1e7dd; }
+  to   { background-color: transparent; }
+}
+
+tr.new-row {
+  animation: rowHighlight 2.5s ease-out forwards;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 576px) {
+  .stat-number { font-size: 1.8rem; }
+}
